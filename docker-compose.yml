@@ -1,0 +1,52 @@
+version: "3"
+services:
+  authors:
+    build: ./authors
+    ports:
+      - "8091:8080"
+    expose:
+      - "8091"
+    links:
+      - mongodb    
+  books:
+    build: ./books
+    ports:
+      - "8092:8080"
+    expose:
+      - "8080"
+    links:
+      - mongodb
+    environment: 
+      - AUTHORS_ENDPOINT=http://authors:8080/api/v1/authors 
+  bff:
+    build: ./bff
+    ports:
+      - "8093:8080"
+    depends_on:
+      - authors
+      - books
+    links:
+      - authors
+      - books
+    environment: 
+      - AUTHORS_ENDPOINT=http://authors:8080/api/v1/authors
+      - BOOKS_ENDPOINT=http://books:8080/api/v1/books
+  rabbitmq:
+    image: rabbitmq:3.8.16-management-alpine
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    links:
+      - authors
+      - books
+      - bff
+  mongodb:
+    image: mongo
+    restart: always
+    ports:
+      - 27017:27017
+    volumes:
+      - mongodb_data_container:/data/db
+volumes:
+  mongodb_data_container:      
