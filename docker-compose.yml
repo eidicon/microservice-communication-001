@@ -2,22 +2,18 @@ version: "3"
 services:
   authors:
     build: ./authors
-    ports:
-      - "50001:50001"
     expose:
       - "50001"
     links:
       - mongodb    
   books:
     build: ./books
-    ports:
-      - "50002:50002"
     expose:
       - "50002"
     links:
       - mongodb
     environment: 
-      - AUTHORS_GRPC_CONNECTION_URL=authors:50001
+      - AUTHORS_GRPC_CONNECTION_URL=authors:50051
   bff:
     build: ./bff
     ports:
@@ -29,8 +25,8 @@ services:
       - authors
       - books
     environment: 
-      - AUTHORS_GRPC_CONNECTION_URL=authors:50001
-      - BOOKS_GRPC_CONNECTION_URL=books:50002
+      - AUTHORS_GRPC_CONNECTION_URL=authors:50051
+      - BOOKS_GRPC_CONNECTION_URL=books:50052
   rabbitmq:
     image: rabbitmq:3.8.16-management-alpine
     container_name: rabbitmq
