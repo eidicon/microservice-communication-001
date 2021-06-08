@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package authors;
+
+service AuthorsService {
+  rpc FindOne (AuthorById) returns (Author){}
+  rpc Update (UpdateDTO) returns (Author){}
+}
+
+message AuthorById {
+  string id = 1;
+}
+
+message UpdateDTO {
+  string id = 1;
+  oneof fieldsToUpdate {
+    int32 numberOfBooks = 6;
+  }
+}
+
+message Author {
+  string id = 1;
+  string firstName = 2;
+  string lastName = 3;
+  int32 age = 4;
+  string biography = 5;
+  int32 numberOfBooks = 6;
+}

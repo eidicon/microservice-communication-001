@@ -1,59 +1,83 @@
-import { HttpService, Injectable } from '@nestjs/common';
+import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
 import { CreateAuthorDto } from './dto/create-author.dto';
 import { CreateBookDto } from './dto/create-book.dto';
 import { UpdateAuthorDto } from './dto/update-author.dto';
-import { AuthorDocument } from './schemas/author.schema';
+import { Author } from './schemas/author.schema';
 import { BookAuthorDto } from './dto/book-author.dto';
-import { BookDocument } from './schemas/book.schema';
+import { Book } from './schemas/book.schema';
 import { NoResponseError } from './errors/no-respons.error';
+import { ClientGrpc } from '@nestjs/microservices';
+import { Observable } from 'rxjs';
 
-const authorsEndpoint =
-  process.env.AUTHORS_ENDPOINT || 'http://localhost:8091/api/v1/authors';
-const booksEndpoint =
-  process.env.BOOKS_ENDPOINT || 'http://localhost:8092/api/v1/authors';
+interface BooksList {
+  data: Book[];
+}
+
+interface AuthorsService {
+  findOne(data: { id: string }): Observable<Author>;
+  findAll(params: unknown): Observable<Author[]>;
+  create(data: CreateAuthorDto): Observable<Author>;
+  update(data: UpdateAuthorDto): Observable<Author>;
+}
+
+interface BooksService {
+  findOne(data: { id: string }): Observable<Book>;
+  findAll(params: unknown): Observable<BooksList>;
+  create(data: CreateBookDto): Observable<Book>;
+}
 
 @Injectable()
-export class DashboardService {
-  constructor(private http: HttpService) {}
+export class DashboardService implements OnModuleInit {
+  private authorsService: AuthorsService;
 
-  async createAuthor(
-    createAuthorDto: CreateAuthorDto,
-  ): Promise<AuthorDocument> {
-    const response = await this.http
-      .post(`${authorsEndpoint}`, createAuthorDto)
+  private booksService: BooksService;
+
+  constructor(
+    @Inject('AUTHORS_PACKAGE') private authorsClient: ClientGrpc,
+    @Inject('BOOKS_PACKAGE') private booksClient: ClientGrpc,
+  ) {}
+
+  onModuleInit() {
+    this.authorsService =
+      this.authorsClient.getService<AuthorsService>('AuthorsService');
+    this.booksService =
+      this.booksClient.getService<BooksService>('BooksService');
+  }
+
+  async createAuthor(createAuthorDto: CreateAuthorDto): Promise<Author> {
+    const response = await this.authorsService
+      .create(createAuthorDto)
       .toPromise();
 
     if (!response) {
       throw new NoResponseError();
     }
 
-    return response.data;
+    return response;
   }
 
-  async createBook(createBookDto: CreateBookDto): Promise<BookDocument> {
-    const response = await this.http
-      .post(`${booksEndpoint}`, createBookDto)
-      .toPromise();
+  async createBook(createBookDto: CreateBookDto): Promise<Book> {
+    const response = await this.booksService.create(createBookDto).toPromise();
 
     if (!response) {
       throw new NoResponseError();
     }
 
-    return response.data;
+    return response;
   }
 
-  async findAllAuthors(): Promise<AuthorDocument[]> {
-    const response = await this.http.get(`${authorsEndpoint}`).toPromise();
+  async findAllAuthors(): Promise<Author[]> {
+    const response = await this.authorsService.findAll({}).toPromise();
 
     if (!response) {
       throw new NoResponseError();
     }
 
-    return response.data;
+    return response;
   }
 
-  async findAllBooks(): Promise<BookAuthorDto[]> {
-    const booksList = await this.http.get(`${booksEndpoint}`).toPromise();
+  async findAllBooks(): Promise<any> {
+    const booksList = await this.booksService.findAll({}).toPromise();
 
     if (!booksList) {
       throw new NoResponseError();
@@ -67,30 +91,31 @@ export class DashboardService {
   }
 
   async findOneBook(id: string): Promise<BookAuthorDto> {
-    const booksList = await this.http.get(`${booksEndpoint}/${id}`).toPromise();
+    const book = await this.booksService.findOne({ id }).toPromise();
 
-    if (!booksList) {
+    if (!book) {
       throw new NoResponseError();
     }
 
-    const [bookView] = await this.populateAuthorsToBooks([booksList.data]);
+    const [bookView] = await this.populateAuthorsToBooks([book]);
     return bookView;
   }
 
   async updateAuthor(id: string, updateAuthorDto: UpdateAuthorDto) {
-    const updatedAuthor = await this.http
-      .put(`${authorsEndpoint}/${id}`, updateAuthorDto)
-      .toPromise();
+    const updatedAuthor = await this.authorsService.update({
+      id,
+      ...updateAuthorDto,
+    });
 
     if (!updatedAuthor) {
       throw new NoResponseError();
     }
 
-    return updatedAuthor.data;
+    return updatedAuthor;
   }
 
   private async populateAuthorsToBooks(
-    booksList: BookDocument[],
+    booksList: Book[],
   ): Promise<BookAuthorDto[]> {
     return Promise.all(
       booksList.map(async (book) => {
@@ -120,15 +145,17 @@ export class DashboardService {
     );
   }
 
-  private async getAuthorById(authorId: string): Promise<AuthorDocument> {
-    const response = await this.http
-      .get(`${authorsEndpoint}/${authorId}`)
+  private async getAuthorById(authorId: string): Promise<Author> {
+    const response = await this.authorsService
+      .findOne({
+        id: authorId,
+      })
       .toPromise();
 
     if (!response) {
       throw new NoResponseError();
     }
 
-    return response.data;
+    return response;
   }
 }
