@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package authors;
+
+service AuthorsService {
+  rpc FindOne (AuthorById) returns (Author) {}
+  rpc FindAll (GetAllAuthorsParam) returns (AuthorsResponse) {}
+  rpc Create (CreateDTO) returns (Author){}
+  rpc Update (UpdateDTO) returns (Author){}
+  rpc Remove (AuthorById) returns (Empty){}
+}
+
+message AuthorById {
+  string id = 1;
+}
+
+message GetAllAuthorsParam {}
+
+message CreateDTO {
+  string firstName = 1;
+  string lastName = 2;
+  int32 age = 3;
+  string biography = 4;
+  int32 numberOfBooks = 5;
+}
+
+message UpdateDTO {
+  string id = 1;
+  oneof fieldsToUpdate {
+    string firstName = 2;
+    string lastName = 3;
+    int32 age = 4;
+    string biography = 5;
+    int32 numberOfBooks = 6;
+  }
+}
+
+message Author {
+  string id = 1;
+  string firstName = 2;
+  string lastName = 3;
+  int32 age = 4;
+  string biography = 5;
+  int32 numberOfBooks = 6;
+}
+
+message AuthorsResponse {
+  repeated Author data = 1;
+}
+
+message Empty {}

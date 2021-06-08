@@ -1,12 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Controller } from '@nestjs/common';
+import { GrpcMethod } from '@nestjs/microservices';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+
 import { CreateAuthorDto } from './dto/create-author.dto';
 import { UpdateAuthorDto } from './dto/update-author.dto';
 import { DocumentNotFoundError } from './interceptors/not-found.interceptor';
 import { Author } from './schemas/author.schema';
 
-@Injectable()
+@Controller()
 export class AuthorsService {
   constructor(@InjectModel(Author.name) private authorModel: Model<Author>) {}
 
@@ -16,6 +18,7 @@ export class AuthorsService {
    * @param {CreateAuthorDto} createAuthorDto
    * @returns {Promise<Author>}
    */
+  @GrpcMethod()
   async create(createAuthorDto: CreateAuthorDto): Promise<Author> {
     return this.authorModel.create(createAuthorDto);
   }
@@ -24,8 +27,14 @@ export class AuthorsService {
    * @description returns all documents
    * @returns {Promise<Author[]>}
    */
-  async findAll(): Promise<Author[]> {
-    return this.authorModel.find().exec();
+  @GrpcMethod()
+  async findAll(): Promise<any> {
+    const authors = await this.authorModel.find().exec();
+    return {
+      data: authors.map((author) => {
+        return author.toJSON();
+      }),
+    };
   }
 
   /**
@@ -34,11 +43,12 @@ export class AuthorsService {
    * @throws {DocumentNotFoundError}
    * @returns {Promise<Author>}
    */
-  async findOne(id: string): Promise<Author> {
-    const author = await this.authorModel.findById(id).exec();
+  @GrpcMethod()
+  async findOne(data: { id: string }): Promise<Author> {
+    const author = await this.authorModel.findById(data.id).exec();
     if (!author) throw new DocumentNotFoundError();
 
-    return author;
+    return author.toJSON();
   }
 
   /**
@@ -48,10 +58,12 @@ export class AuthorsService {
    * @throws {DocumentNotFoundError}
    * @returns {Promise<Author>}
    */
-  async update(id: string, updateAuthorDto: UpdateAuthorDto): Promise<Author> {
+  @GrpcMethod()
+  async update(data: { id: string; fields: UpdateAuthorDto }): Promise<Author> {
+    const { id, ...fields } = data;
     const updatedAuthor = await this.authorModel.findByIdAndUpdate(
       id,
-      updateAuthorDto,
+      { ...fields },
       {
         new: true,
       },
@@ -66,10 +78,11 @@ export class AuthorsService {
    * @description removes document by given id
    * @param {string} id
    * @throws {DocumentNotFoundError}
-   * @returns {Promise<void>}
+   * @returns {Promise<any>}
    */
-  async remove(id: string): Promise<void> {
-    const result = await this.authorModel.deleteOne({ _id: id });
+  @GrpcMethod()
+  async remove(data: { id: string }): Promise<any> {
+    const result = await this.authorModel.deleteOne({ _id: data.id });
     if (!result.deletedCount) throw new DocumentNotFoundError();
 
     return;

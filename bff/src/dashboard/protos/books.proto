@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package books;
+
+service BooksService {
+  rpc Create(CreateDTO) returns (Book){}
+  rpc FindOne (BookById) returns (Book){}
+  rpc FindAll (Empty) returns (BooksResponse){}
+  rpc Update (UpdateDTO) returns (Book){}
+  rpc Remove (BookById) returns (Empty){}
+}
+
+message BookById {
+  string id = 1;
+}
+
+message Book {
+  string id = 1;
+  string authorId = 2;
+  string title = 3;
+  string description = 4;
+}
+
+message BooksResponse {
+  repeated Book data = 1;
+}
+
+message Empty {}
+
+message CreateDTO {
+  string authorId = 1;
+  string title = 2;
+  string description = 3;
+}
+
+message UpdateDTO {
+  string id = 1;
+  oneof fieldsToUpdate {
+    string authorId = 2;
+    string title = 3;
+    string description = 4;
+  }
+}

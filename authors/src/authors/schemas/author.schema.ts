@@ -3,11 +3,13 @@ import { Document } from 'mongoose';
 
 export type AuthorDocument = Author & Document;
 
-@Schema()
+@Schema({
+  toJSON: {
+    versionKey: false,
+    virtuals: true,
+  },
+})
 export class Author {
-  @Prop()
-  readonly id: string;
-
   @Prop()
   readonly firstName: string;
 

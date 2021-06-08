@@ -3,9 +3,14 @@ import { Document } from 'mongoose';
 
 export type BookDocument = Book & Document;
 
-@Schema()
+@Schema({
+  toJSON: {
+    versionKey: false,
+    virtuals: true,
+  },
+})
 export class Book {
-  @Prop({ required: true })
+  @Prop()
   readonly authorId: string;
 
   @Prop()

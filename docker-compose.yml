@@ -2,22 +2,18 @@ version: "3"
 services:
   authors:
     build: ./authors
-    ports:
-      - "8091:8080"
     expose:
-      - "8091"
+      - "50001"
     links:
       - mongodb    
   books:
     build: ./books
-    ports:
-      - "8092:8080"
     expose:
-      - "8080"
+      - "50002"
     links:
       - mongodb
     environment: 
-      - AUTHORS_ENDPOINT=http://authors:8080/api/v1/authors 
+      - AUTHORS_GRPC_CONNECTION_URL=authors:50051
   bff:
     build: ./bff
     ports:
@@ -29,8 +25,8 @@ services:
       - authors
       - books
     environment: 
-      - AUTHORS_ENDPOINT=http://authors:8080/api/v1/authors
-      - BOOKS_ENDPOINT=http://books:8080/api/v1/books
+      - AUTHORS_GRPC_CONNECTION_URL=authors:50051
+      - BOOKS_GRPC_CONNECTION_URL=books:50052
   rabbitmq:
     image: rabbitmq:3.8.16-management-alpine
     container_name: rabbitmq

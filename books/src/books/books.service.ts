@@ -1,28 +1,42 @@
 import {
-  HttpService,
-  Injectable,
+  Controller,
+  Inject,
   InternalServerErrorException,
+  OnModuleInit,
 } from '@nestjs/common';
+import { ClientGrpc, GrpcMethod } from '@nestjs/microservices';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { CreateBookDto } from './dto/create-book.dto';
+import { UpdateAuthorDto } from './dto/update-author.dto';
 import { UpdateBookDto } from './dto/update-book.dto';
 import { DocumentNotFoundError } from './interceptors/not-found.interceptor';
+import { Author } from './schemas/author.schema';
 import { Book, BookDocument } from './schemas/book.schema';
+import { Observable } from 'rxjs';
 
 interface IFunction {
-  (authorId: string, existedNumberOfBooks: string): Promise<void>;
+  (authorId: string, existedNumberOfBooks: any): Promise<void>;
 }
 
-const authorsEndpoint =
-  process.env.AUTHORS_ENDPOINT || 'http://localhost:8091/api/v1/authors';
+interface AuthorsService {
+  findOne(data: { id: string }): Observable<Author>;
+  update(data: UpdateAuthorDto): Observable<Author>;
+}
 
-@Injectable()
-export class BooksService {
+@Controller()
+export class BooksService implements OnModuleInit {
+  private authorsService: AuthorsService;
+
   constructor(
     @InjectModel(Book.name) private bookModel: Model<BookDocument>,
-    private http: HttpService,
+    @Inject('AUTHORS_PACKAGE') private authorsClient: ClientGrpc,
   ) {}
+
+  onModuleInit() {
+    this.authorsService =
+      this.authorsClient.getService<AuthorsService>('AuthorsService');
+  }
 
   /**
    * @description creates a new document
@@ -30,6 +44,7 @@ export class BooksService {
    * @param {CreateBookDto} createBookDto
    * @returns {Promise<BookDocument>}
    */
+  @GrpcMethod()
   async create(createBookDto: CreateBookDto): Promise<BookDocument> {
     let aNewBook: BookDocument;
 
@@ -40,7 +55,6 @@ export class BooksService {
         this.increaseNumberOfBooks.bind(this),
       );
     } catch (err) {
-      console.log(aNewBook);
       if (aNewBook && aNewBook._id) {
         await this.bookModel.deleteOne({ _id: aNewBook._id });
       }
@@ -54,8 +68,14 @@ export class BooksService {
    * @description returns all existing documents
    * @returns {Promise<BookDocument[]>}
    */
-  findAll(): Promise<BookDocument[]> {
-    return this.bookModel.find().exec();
+  @GrpcMethod()
+  async findAll(): Promise<any> {
+    const books = await this.bookModel.find().exec();
+    return {
+      data: books.map((book) => {
+        return book.toJSON();
+      }),
+    };
   }
 
   /**
@@ -64,8 +84,9 @@ export class BooksService {
    * @throws {DocumentNotFoundError}
    * @returns {Promise<BookDocument>}
    */
-  async findOne(id: string): Promise<BookDocument> {
-    const book = await this.bookModel.findById(id).exec();
+  @GrpcMethod()
+  async findOne(data: { id: string }): Promise<BookDocument> {
+    const book = await this.bookModel.findById(data.id).exec();
     if (!book) throw new DocumentNotFoundError();
 
     return book;
@@ -78,13 +99,15 @@ export class BooksService {
    * @throws {DocumentNotFoundError}
    * @returns {Promise<BookDocument>}
    */
-  async update(
-    id: string,
-    updateBookDto: UpdateBookDto,
-  ): Promise<BookDocument> {
+  @GrpcMethod()
+  async update(data: {
+    id: string;
+    updateBookDto: UpdateBookDto;
+  }): Promise<BookDocument> {
+    const { id, ...fields } = data;
     const updatedBook = await this.bookModel.findByIdAndUpdate(
       id,
-      updateBookDto,
+      { ...fields },
       {
         new: true,
       },
@@ -100,15 +123,16 @@ export class BooksService {
    * @throws {DocumentNotFoundError}
    * @returns {Promise<void>}
    */
+  @GrpcMethod()
   async remove(id: string): Promise<void> {
     // TODO: add fallback
     const bookDocument = await this.bookModel.findById(id);
     const result = await this.bookModel.deleteOne({ _id: id });
     if (!result.deletedCount) throw new DocumentNotFoundError();
-    await this.updateAuthorsBookCount(
-      bookDocument.authorId,
-      this.decreaseNumberOfBooks.bind(this),
-    );
+    // await this.updateAuthorsBookCount(
+    //   bookDocument.authorId,
+    //   this.decreaseNumberOfBooks.bind(this),
+    // );
 
     return;
   }
@@ -124,15 +148,11 @@ export class BooksService {
     authorId: string,
     action: IFunction,
   ): Promise<void> {
-    const response = await this.http
-      .get(`${authorsEndpoint}/${authorId}`)
+    const response: Author = await this.authorsService
+      .findOne({ id: authorId })
       .toPromise();
 
-    if (!response || !response.data || !response.data.numberOfBooks) {
-      throw new Error('Cannot get number of books from response');
-    }
-
-    await action(authorId, response.data.numberOfBooks);
+    await action(authorId, response.numberOfBooks);
   }
 
   /**
@@ -144,13 +164,15 @@ export class BooksService {
    */
   private async increaseNumberOfBooks(
     authorId: string,
-    existedNumberOfBooks: string,
+    existedNumberOfBooks: any,
   ): Promise<void> {
-    await this.http
-      .put(`${authorsEndpoint}/${authorId}`, {
+    await this.authorsService
+      .update({
+        id: authorId,
         numberOfBooks: +existedNumberOfBooks + 1,
       })
       .toPromise();
+    return;
   }
 
   /**
@@ -168,10 +190,9 @@ export class BooksService {
       return;
     }
 
-    await this.http
-      .put(`${authorsEndpoint}/${authorId}`, {
-        numberOfBooks: +existedNumberOfBooks - 1,
-      })
-      .toPromise();
+    await this.authorsService.update({
+      id: authorId,
+      numberOfBooks: +existedNumberOfBooks - 1,
+    });
   }
 }
