@@ -6,7 +6,7 @@ import { AuthorsModule } from './authors/authors.module';
 @Module({
   imports: [
     AuthorsModule,
-    MongooseModule.forRoot('mongodb://mongodb:27017/authors'),
+    MongooseModule.forRoot('mongodb://localhost:27017/authors'),
   ],
 })
 export class AppModule {}

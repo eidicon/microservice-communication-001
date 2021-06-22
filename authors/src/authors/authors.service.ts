@@ -1,5 +1,9 @@
-import { Controller } from '@nestjs/common';
-import { GrpcMethod } from '@nestjs/microservices';
+import {
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
+import { ClientProxy, RmqContext } from '@nestjs/microservices';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 
@@ -8,9 +12,12 @@ import { UpdateAuthorDto } from './dto/update-author.dto';
 import { DocumentNotFoundError } from './interceptors/not-found.interceptor';
 import { Author } from './schemas/author.schema';
 
-@Controller()
+@Injectable()
 export class AuthorsService {
-  constructor(@InjectModel(Author.name) private authorModel: Model<Author>) {}
+  constructor(
+    @InjectModel(Author.name) private authorModel: Model<Author>,
+    @Inject('AUTHORS_AMQP_SERVICE') private readonly amqpClient: ClientProxy,
+  ) {}
 
   /**
    * @description creates document
@@ -18,16 +25,18 @@ export class AuthorsService {
    * @param {CreateAuthorDto} createAuthorDto
    * @returns {Promise<Author>}
    */
-  @GrpcMethod()
   async create(createAuthorDto: CreateAuthorDto): Promise<Author> {
-    return this.authorModel.create(createAuthorDto);
+    const aNewAuthor = await this.authorModel.create(createAuthorDto);
+    await this.amqpClient
+      .emit('author-created', JSON.stringify(aNewAuthor))
+      .toPromise();
+    return aNewAuthor.toJSON();
   }
 
   /**
    * @description returns all documents
    * @returns {Promise<Author[]>}
    */
-  @GrpcMethod()
   async findAll(): Promise<any> {
     const authors = await this.authorModel.find().exec();
     return {
@@ -43,9 +52,8 @@ export class AuthorsService {
    * @throws {DocumentNotFoundError}
    * @returns {Promise<Author>}
    */
-  @GrpcMethod()
-  async findOne(data: { id: string }): Promise<Author> {
-    const author = await this.authorModel.findById(data.id).exec();
+  async findOne(id: string): Promise<Author> {
+    const author = await this.authorModel.findById(id).exec();
     if (!author) throw new DocumentNotFoundError();
 
     return author.toJSON();
@@ -58,33 +66,48 @@ export class AuthorsService {
    * @throws {DocumentNotFoundError}
    * @returns {Promise<Author>}
    */
-  @GrpcMethod()
-  async update(data: { id: string; fields: UpdateAuthorDto }): Promise<Author> {
-    const { id, ...fields } = data;
-    const updatedAuthor = await this.authorModel.findByIdAndUpdate(
-      id,
-      { ...fields },
-      {
-        new: true,
-      },
-    );
+  async update(id: string, fields: UpdateAuthorDto): Promise<Author> {
+    const updatedAuthor = await this.authorModel.findByIdAndUpdate(id, fields, {
+      new: true,
+    });
 
     if (!updatedAuthor) throw new DocumentNotFoundError();
+    await this.amqpClient
+      .send('author-updated', JSON.stringify(updatedAuthor))
+      .toPromise();
 
     return updatedAuthor;
   }
 
-  /**
-   * @description removes document by given id
-   * @param {string} id
-   * @throws {DocumentNotFoundError}
-   * @returns {Promise<any>}
-   */
-  @GrpcMethod()
-  async remove(data: { id: string }): Promise<any> {
-    const result = await this.authorModel.deleteOne({ _id: data.id });
-    if (!result.deletedCount) throw new DocumentNotFoundError();
+  async increaseNumberOfBooks(
+    author: string,
+    context: RmqContext,
+  ): Promise<void> {
+    try {
+      const parsedAuthor = JSON.parse(author);
+      const authorBefore = await this.findOne(parsedAuthor.id);
+      const authorAfter = await this.authorModel.findByIdAndUpdate(
+        parsedAuthor.id,
+        {
+          numberOfBooks: authorBefore.numberOfBooks + 1,
+        },
+        {
+          new: true,
+        },
+      );
 
-    return;
+      if (!authorAfter) throw new DocumentNotFoundError();
+      if (authorAfter.numberOfBooks - authorBefore.numberOfBooks !== 1) {
+        throw new InternalServerErrorException(
+          'Failed to increase numberOfBooks',
+        );
+      }
+      const channel = context.getChannelRef();
+      const originalMsg = context.getMessage();
+      channel.ack(originalMsg);
+    } catch (err) {
+      console.log(err);
+      throw new InternalServerErrorException(err);
+    }
   }
 }
