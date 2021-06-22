@@ -1,47 +1,27 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import {
-  ClientProxyFactory,
-  ClientsModule,
-  Transport,
-} from '@nestjs/microservices';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { join } from 'path';
+import { ClientsModule } from '@nestjs/microservices';
 
 import { BooksService } from './books.service';
 import { Book, BookSchema } from './schemas/book.schema';
-import { grpcClientOptions } from '../grpc-options.client';
-import grpcConnectionConfig from './config/grpc-connection.config';
+import { amqpClientOptions } from '../books/config/books/amqp-options.client';
+import { BooksController } from './books.controller';
+import { Author, AuthorSchema } from 'src/author/schemas/author.schema';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: Book.name, schema: BookSchema }]),
+    MongooseModule.forFeature([
+      { name: Book.name, schema: BookSchema },
+      { name: Author.name, schema: AuthorSchema },
+    ]),
     ClientsModule.register([
       {
-        name: 'BOOKS_PACKAGE',
-        ...grpcClientOptions,
+        name: 'BOOKS_AMQP_SERVICE',
+        ...amqpClientOptions,
       },
     ]),
-    ConfigModule.forRoot({
-      load: [grpcConnectionConfig],
-    }),
   ],
-  controllers: [BooksService],
-  providers: [
-    {
-      provide: 'AUTHORS_PACKAGE',
-      useFactory: (configService: ConfigService) => {
-        return ClientProxyFactory.create({
-          transport: Transport.GRPC,
-          options: {
-            package: 'authors',
-            protoPath: join(__dirname, './protos/authors.proto'),
-            url: configService.get<string>('grpcConnection.authors'),
-          },
-        });
-      },
-      inject: [ConfigService],
-    },
-  ],
+  providers: [BooksService],
+  controllers: [BooksController],
 })
 export class BooksModule {}

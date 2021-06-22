@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, SchemaTypes } from 'mongoose';
 
 export type BookDocument = Book & Document;
 
@@ -7,6 +7,10 @@ export type BookDocument = Book & Document;
   toJSON: {
     versionKey: false,
     virtuals: true,
+    transform: function (doc, ret) {
+      ret.id = ret._id;
+      delete ret._id;
+    },
   },
 })
 export class Book {

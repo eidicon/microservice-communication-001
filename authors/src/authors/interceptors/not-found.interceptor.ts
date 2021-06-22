@@ -7,16 +7,10 @@ import {
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { catchError } from 'rxjs/operators';
-import { status } from '@grpc/grpc-js';
 
 export class DocumentNotFoundError extends Error {
-  private code: number;
-  private metadata: string;
   constructor() {
     super();
-    this.message = 'not_found';
-    this.code = status.NOT_FOUND;
-    this.metadata = 'jhgjhgjh';
   }
 }
 

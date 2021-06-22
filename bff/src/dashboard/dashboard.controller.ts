@@ -3,7 +3,6 @@ import { DashboardService } from './dashboard.service';
 import { CreateAuthorDto } from './dto/create-author.dto';
 import { CreateBookDto } from './dto/create-book.dto';
 import { UpdateAuthorDto } from './dto/update-author.dto';
-import { Author } from './schemas/author.schema';
 import { PipeObjectId } from './validation/object-id.pipe';
 
 @Controller('dashboard')
@@ -14,14 +13,13 @@ export class DashboardController {
   createAuthor(@Body() createAuthorDto: CreateAuthorDto) {
     return this.dashboardService.createAuthor(createAuthorDto);
   }
-
   @Post('books')
   createBook(@Body() createBookDto: CreateBookDto) {
     return this.dashboardService.createBook(createBookDto);
   }
 
   @Get('authors')
-  findAllAuthors(): Promise<Author[]> {
+  findAllAuthors() {
     return this.dashboardService.findAllAuthors();
   }
 
@@ -34,7 +32,6 @@ export class DashboardController {
   findOneAuthor(@Param('id', PipeObjectId) id: string) {
     return this.dashboardService.findOneAuthor(id);
   }
-
   @Get('books/:id')
   findOneBook(@Param('id', PipeObjectId) id: string) {
     return this.dashboardService.findOneBook(id);

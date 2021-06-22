@@ -1,21 +1,28 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { ClientsModule } from '@nestjs/microservices';
+import { ClientProxyFactory } from '@nestjs/microservices';
 
 import { AuthorsService } from './authors.service';
 import { Author, AuthorSchema } from './schemas/author.schema';
-import { grpcClientOptions } from '../grpc-options.client';
+import { amqpClientOptions } from 'src/config/authors/amqp-options.client';
+import { AuthorsController } from './authors.controller';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 
 @Module({
   imports: [
+    ConfigModule,
     MongooseModule.forFeature([{ name: Author.name, schema: AuthorSchema }]),
-    ClientsModule.register([
-      {
-        name: 'AUTHOR_PACKAGE',
-        ...grpcClientOptions,
-      },
-    ]),
   ],
-  controllers: [AuthorsService],
+  controllers: [AuthorsController],
+  providers: [
+    {
+      provide: 'AUTHORS_AMQP_SERVICE',
+      useFactory: (configService: ConfigService) => {
+        return ClientProxyFactory.create(amqpClientOptions);
+      },
+      inject: [ConfigService],
+    },
+    AuthorsService,
+  ],
 })
 export class AuthorsModule {}
